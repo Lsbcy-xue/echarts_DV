@@ -1,6 +1,6 @@
 from django.core.exceptions import ObjectDoesNotExist
 from django_echarts.starter.sites import DJESite, SiteOpts
-from pyecharts.charts import Bar, Line, Gauge, Bar3D, Map, Tree
+from pyecharts.charts import Bar, Line, Gauge, Bar3D, Map, Tree, Sunburst, TreeMap
 from charts.models import Gini, RegionData, IncomeData
 from pyecharts.charts import Timeline, Pie
 from django_echarts.stores.entity_factory import factory
@@ -523,7 +523,10 @@ def generate_tree_timeline():
         for area, provinces in area_dict.items():
             children = []
             for item in year_data:
-                if item["name"][:-1] in provinces:
+                # 去掉省份名称最后的“省”、“市”、“自治区”等
+                short_name = (item["name"].replace("省", "").replace("市", "").replace("自治区", "").
+                              replace("壮族", "").replace("维吾尔", "").replace("回族", ""))
+                if short_name in provinces:
                     children.append({"name": f"{item['name']} ({item['value']})"})
             tree_data.append({"name": area, "children": children})
         return [{"name": "全国", "children": tree_data}]
@@ -558,6 +561,279 @@ def generate_tree_timeline():
     return timeline
 
 
+@site_obj.register_chart(
+    name="Income_province_bar",
+    title="居民人均可支配收入（按省份，柱形图）",
+    description=INCOME_PROVENCE_BAR_DESCRIPTION,
+    catalog="2",
+    top=1,
+)
+def generate_province_bar():
+    # Retrieve data from RegionData and format it
+    def get_data_from_region_data():
+        data = {}
+        for year in range(2014, 2022):  # Adjust the years based on your data
+            year_data = RegionData.objects.filter(year=year)
+            data[year] = [{"name": obj.region, "value": obj.metric_value} for obj in year_data]
+        return data
+
+    # Function to sort data
+    def format_year_data(year_data):
+        sorted_data = sorted(year_data, key=lambda x: x['value'], reverse=True)
+        return sorted_data
+
+    # Main part of the code
+    total_data = {}
+    total_data["dataIncome"] = get_data_from_region_data()
+
+    timeline_bar = Timeline(init_opts=opts.InitOpts(width="1000px", height="600px"))
+
+    # Generate the bar chart
+    for y in range(2014, 2022):  # Adjust the years based on your data
+        sorted_year_data = format_year_data(total_data["dataIncome"][y])
+        names = [x["name"] for x in sorted_year_data]
+        values = [x["value"] for x in sorted_year_data]
+
+        bar = (
+            Bar(init_opts=opts.InitOpts(width="1000px", height="600px"))
+            .add_xaxis(xaxis_data=names)
+            .add_yaxis(
+                series_name="人均可支配收入",
+                y_axis=values,
+                label_opts=opts.LabelOpts(is_show=False),
+            )
+            .set_global_opts(
+                title_opts=opts.TitleOpts(
+                    title="{}全国及各省份居民人均可支配收入".format(y), subtitle="数据来自相关统计局"),
+                tooltip_opts=opts.TooltipOpts(trigger="axis", axis_pointer_type="cross"),
+                toolbox_opts=opts.ToolboxOpts(is_show=True, orient="vertical", pos_left="left", pos_top="center")
+            )
+        )
+        timeline_bar.add(bar, time_point=str(y))
+
+    return timeline_bar
+
+
+@site_obj.register_chart(
+    name="Income_province_pie",
+    title="居民人均可支配收入（按省份，饼图）",
+    description=INCOME_PROVENCE_PIE_DESCRIPTION,
+    catalog="2",
+    top=1,
+)
+def generate_province_pie():
+    def get_data_from_region_data():
+        data = {}
+        for year in range(2014, 2022):  # Adjust based on your data
+            year_data = RegionData.objects.filter(year=year)
+            data[year] = [{"name": obj.region, "value": obj.metric_value} for obj in year_data]
+        return data
+
+    # Aggregate data by area
+    def get_area_data(year_data):
+        area_values = {key: 0 for key in area_dict.keys()}
+        for item in year_data:
+            for area, provinces in area_dict.items():
+                if item["name"][:-1] in provinces:
+                    area_values[area] += item["value"]
+        return [{"name": area, "value": value} for area, value in area_values.items()]
+
+    # Definitions of areas and provinces
+    area_dict = {
+        "华东": ["江苏", "浙江", "山东", "安徽", "江西", "福建", "上海"],
+        "华南": ["广东", "广西", "海南"],
+        "华中": ["湖北", "湖南", "河南"],
+        "华北": ["山西", "河北", "内蒙古", "北京", "天津"],
+        "东北": ["吉林", "辽宁", "黑龙江"],
+        "西北": ["新疆", "陕西", "甘肃", "宁夏", "青海"],
+        "西南": ["四川", "西藏", "贵州", "云南", "重庆"]
+    }
+
+    # Main code
+    total_data = {}
+    total_data["dataIncome"] = get_data_from_region_data()
+
+    timeline_pie = Timeline(init_opts=opts.InitOpts(width="1000px", height="600px"))
+
+    # Generate the pie chart
+    for y in range(2014, 2022):
+        sorted_year_data = get_area_data(total_data["dataIncome"][y])
+        names = [x["name"] for x in sorted_year_data]
+        values = [x["value"] for x in sorted_year_data]
+
+        pie = (
+            Pie()
+            .add(
+                series_name="",
+                data_pair=[list(z) for z in zip(names, values)],
+                radius=["20%", "40%"],
+            )
+            .set_global_opts(
+                title_opts=opts.TitleOpts(title="{}年按大区分类的收入分布".format(y)),
+            )
+        )
+
+        timeline_pie.add(pie, time_point=str(y))
+
+    return timeline_pie
+
+
+@site_obj.register_chart(
+    name="Income_province_sunburst",
+    title="居民人均可支配收入（按省份，旭日图）",
+    description=INCOME_PROVENCE_SUNBURST_DESCRIPTION,
+    catalog="2",
+    top=1,
+)
+def generate_province_sunburst():
+    # 从 RegionData 模型中检索并格式化数据
+    def get_data_from_region_data():
+        data = {}
+        for year in range(2014, 2022):  # 根据你的数据范围调整年份
+            year_data = RegionData.objects.filter(year=year)
+            data[year] = [{"name": obj.region, "value": obj.metric_value} for obj in year_data]
+        return data
+
+    # 将数据转换为旭日图结构
+    def convert_to_sunburst_structure(year_data, area_dict):
+        sunburst_data = []
+        for area, provinces in area_dict.items():
+            children = []
+            for item in year_data:
+                short_name = (item["name"].replace("省", "").replace("市", "").replace("自治区", "")
+                              .replace("壮族", "").replace("维吾尔", "").replace("回族", ""))
+                if short_name in provinces:
+                    children.append({"name": f"{item['name']} ({item['value']})", "value": item['value']})
+            sunburst_data.append({"name": area, "children": children})
+        return sunburst_data
+
+    # 地区和大区定义（与你的代码相同）
+    area_dict = {
+        "华东": ["江苏", "浙江", "山东", "安徽", "江西", "福建", "上海"],
+        "华南": ["广东", "广西", "海南"],
+        "华中": ["湖北", "湖南", "河南"],
+        "华北": ["山西", "河北", "内蒙古", "北京", "天津"],
+        "东北": ["吉林", "辽宁", "黑龙江"],
+        "西北": ["新疆", "陕西", "甘肃", "宁夏", "青海"],
+        "西南": ["四川", "西藏", "贵州", "云南", "重庆"]
+    }
+
+    # 主要代码部分
+    total_data = get_data_from_region_data()
+
+    timeline = Timeline(init_opts=opts.InitOpts(width="1200px", height="800px"))
+
+    # 生成旭日图并添加到时间轴
+    for y in range(2014, 2022):  # 根据你的数据范围调整年份
+        year_data = total_data[y]
+        sunburst_data = convert_to_sunburst_structure(year_data, area_dict)
+
+        sunburst = (
+            Sunburst(init_opts=opts.InitOpts(width="1000px", height="600px"))
+            .add(
+                "",
+                data_pair=sunburst_data,
+                highlight_policy="ancestor",
+                radius=[0, "95%"],
+                sort_="null",
+                levels=[
+                    {},
+                    {
+                        "r0": "15%",
+                        "r": "35%",
+                        "itemStyle": {"borderWidth": 2},
+                        "label": {"rotate": "tangential"},
+                    },
+                    {"r0": "35%", "r": "70%", "label": {"align": "right"}},
+                    {
+                        "r0": "70%",
+                        "r": "72%",
+                        "label": {"position": "outside", "padding": 3, "silent": False},
+                        "itemStyle": {"borderWidth": 3},
+                    },
+                ],
+            )
+            .set_global_opts(title_opts=opts.TitleOpts(title=f"Sunburst for Year {y}"))
+        )
+        timeline.add(sunburst, f"{y}年")
+
+    return timeline
+
+
+@site_obj.register_chart(
+    name="Income_province_treemap",
+    title="居民人均可支配收入（按省份，矩形树图）",
+    description=INCOME_PROVENCE_TREEMAP_DESCRIPTION,
+    catalog="2",
+    top=1,
+)
+def generate_province_treemap():
+    # 从 RegionData 模型中检索并格式化数据
+    def get_data_from_region_data():
+        data = {}
+        for year in range(2014, 2022):  # 根据你的数据范围调整年份
+            year_data = RegionData.objects.filter(year=year)
+            data[year] = [{"name": obj.region, "value": obj.metric_value} for obj in year_data]
+        return data
+
+    # 将数据转换为树状图结构
+    def convert_to_tree_map_structure(year_data, area_dict):
+        tree_map_data = {"children": []}
+        for area, provinces in area_dict.items():
+            children = []
+            for item in year_data:
+                short_name = (item["name"].replace("省", "").replace("市", "").replace("自治区", "")
+                              .replace("壮族", "").replace("维吾尔", "").replace("回族", ""))
+                if short_name in provinces:
+                    children.append({"name": f"{item['name']} ({item['value']})", "value": item['value']})
+            tree_map_data["children"].append({"name": area, "children": children})
+        return tree_map_data
+
+    # 地区和大区定义（与你的代码相同）
+    area_dict = {
+        "华东": ["江苏", "浙江", "山东", "安徽", "江西", "福建", "上海"],
+        "华南": ["广东", "广西", "海南"],
+        "华中": ["湖北", "湖南", "河南"],
+        "华北": ["山西", "河北", "内蒙古", "北京", "天津"],
+        "东北": ["吉林", "辽宁", "黑龙江"],
+        "西北": ["新疆", "陕西", "甘肃", "宁夏", "青海"],
+        "西南": ["四川", "西藏", "贵州", "云南", "重庆"]
+    }
+
+    # 主要代码部分
+    total_data = get_data_from_region_data()
+
+    timeline = Timeline(init_opts=opts.InitOpts(width="1200px", height="800px"))
+    timeline.add_schema(pos_bottom="3%")
+
+    # 生成树状图并添加到时间轴
+    for y in range(2014, 2022):  # 根据你的数据范围调整年份
+        year_data = total_data[y]
+        tree_map_data = convert_to_tree_map_structure(year_data, area_dict)
+
+        tree_map = (
+            TreeMap(init_opts=opts.InitOpts(width="1200px", height="720px"))
+            .add(
+                series_name="全国",
+                data=tree_map_data["children"],
+                visual_min=300,
+                leaf_depth=1,
+                label_opts=opts.LabelOpts(position="inside"),
+            )
+            .set_global_opts(
+                legend_opts=opts.LegendOpts(is_show=False),
+                title_opts=opts.TitleOpts(
+                    title=f"TreeMap for Year {y}",
+                    pos_top="5%",
+                    pos_left="center"
+                )
+            )
+        )
+        timeline.add(tree_map, f"{y}年")
+
+    return timeline
+
+
 # Widget
 # @site_obj.register_html_widget
 # def this_month_panel():
@@ -581,6 +857,7 @@ def home1_panel():
     number_p.add('5.5', 'GDP增速', '%', catalog='success')
     number_p.set_spans(6)
     return number_p
+
 
 
 

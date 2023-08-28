@@ -2,9 +2,9 @@
 
 ```bash
 # Import from csv:
-python manage.py import_csv_DIBP --path ./csv_data/disposable_income_by_provinve.csv
-python manage.py import_csv_DIN --path ./csv_data/disposable_income_nation.csv
-python manage.py import_csv_Gini --path ./csv_data/income_and_inequlity_metrics_national.csv
+python manage.py import_csv_DIBP  ./csv_data/disposable_income_by_province.csv
+python manage.py import_csv_DIN  ./csv_data/disposable_income_national.csv
+python manage.py import_csv_Gini  ./csv_data/income_and_inequality_metrics_national.csv
 
 # Create superuser:
 python manage.py createsuperuser

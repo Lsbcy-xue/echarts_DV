@@ -39,7 +39,7 @@ nav = {
     'nav_right': ['settings'],  # 右侧导航栏包含的页面
     'nav_footer': [  # 页脚导航栏
         {'text': '国家统计局', 'url': 'http://www.stats.gov.cn/sj/', 'new_page': True},  # 国家统计局的链接
-        {'text': '网站源码', 'url': 'https://github.com/kinegratii/zinc', 'new_page': True}  # 网站源码的链接
+        {'text': '网站源码', 'url': 'https://github.com/Lsbcy-xue/echarts_DV.git', 'new_page': True}  # 网站源码的链接
     ]
 }
 
